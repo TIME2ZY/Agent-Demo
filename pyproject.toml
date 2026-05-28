@@ -1,7 +1,7 @@
 [project]
 name = "memory-first-agent"
 version = "0.1.0"
-description = "CLI-based personal assistant with project and long-term memory"
+description = "Early-stage memory-first CLI assistant foundation"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -21,3 +21,4 @@ addopts = "-q"
 testpaths = ["tests"]
 asyncio_mode = "auto"
 pythonpath = ["."]
+python_files = ["test_*.py"]
