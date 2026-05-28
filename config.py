@@ -28,7 +28,7 @@ def load_settings() -> Settings:
 
     deepseek_api_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
     deepseek_base_url = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com").strip()
-    model_name = os.getenv("MODEL_NAME", "deepseek-chat").strip()
+    model_name = os.getenv("MODEL_NAME", "deepseek-v4-flash").strip()
     db_path_value = os.getenv("DB_PATH", "agent_memory.db").strip()
 
     if not deepseek_api_key:
