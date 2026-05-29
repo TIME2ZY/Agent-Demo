@@ -10,6 +10,7 @@ def test_normalize_response_returns_message_result():
                 "message": {
                     "role": "assistant",
                     "content": "Hello from DeepSeek",
+                    "reasoning_conttent": "Simple greeting response",
                 },
                 "finish_reason": "stop",
             }
@@ -21,6 +22,7 @@ def test_normalize_response_returns_message_result():
     assert isinstance(result, LLMResult)
     assert result.type == "message"
     assert result.content == "Hello from DeepSeek"
+    assert result.reasoning_content == "Simple greeting response"
     assert result.tool_name is None
 
 
@@ -59,3 +61,4 @@ def test_normalize_response_returns_tool_call_result():
     assert result.type == "tool_call"
     assert result.tool_name == "memory_write"
     assert result.tool_args["key"] == "response_style"
+    assert result.reasoning_content is None

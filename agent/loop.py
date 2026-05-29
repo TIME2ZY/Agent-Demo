@@ -1,6 +1,7 @@
 from typing import Any
 
 from agent.prompt import build_messages
+from llm.client import LLMResult
 
 
 class AgentLoop:
@@ -20,7 +21,7 @@ class AgentLoop:
         self._longterm_store = longterm_store
         self._tool_registry = tool_registry
 
-    async def run_turn(self, user_id: str, project_id: str, user_message: str) -> str:
+    async def run_turn(self, user_id: str, project_id: str, user_message: str) -> LLMResult:
         self._session_memory.add_user_message(user_message)
 
         project_context = await self._project_store.get_project_context(project_id)
@@ -42,7 +43,7 @@ class AgentLoop:
 
         if result.type == "message":
             self._session_memory.add_assistant_message(result.content)
-            return result.content
+            return result
 
         if self._settings.max_tool_steps_per_turn < 1:
             raise RuntimeError("Tool calls are disabled for this run")
@@ -65,4 +66,4 @@ class AgentLoop:
             tools=self._tool_registry.schemas(),
         )
         self._session_memory.add_assistant_message(final_result.content)
-        return final_result.content
+        return final_result

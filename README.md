@@ -53,6 +53,12 @@ uv run python main.py --user-id demo-user --project-id demo-project
 
 Type `exit` or `quit` to end the session.
 
+Use `--debug` when you want provider request logs and raw response debugging:
+
+```powershell
+uv run python main.py --user-id demo-user --project-id demo-project --debug
+```
+
 ## Environment Variables
 
 Copy `.env.example` to `.env` and fill in the values you need:

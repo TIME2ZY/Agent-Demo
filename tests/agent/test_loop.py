@@ -39,17 +39,26 @@ class FakeRegistry:
 
 
 class FakeResult:
-    def __init__(self, result_type, content="", tool_name=None, tool_args=None):
+    def __init__(
+        self,
+        result_type,
+        content="",
+        tool_name=None,
+        tool_args=None,
+        reasoning_content=None,
+    ):
         self.type = result_type
         self.content = content
         self.tool_name = tool_name
         self.tool_args = tool_args
+        self.reasoning_content = reasoning_content
 
 
 @pytest.mark.asyncio
 async def test_run_turn_returns_normal_message_when_no_tool_is_called():
     from agent.loop import AgentLoop
 
+    session_memory = SessionMemory()
     loop = AgentLoop(
         settings=type(
             "Settings",
@@ -60,22 +69,30 @@ async def test_run_turn_returns_normal_message_when_no_tool_is_called():
                 "max_longterm_items_in_prompt": 5,
             },
         )(),
-        client=FakeClient([FakeResult("message", content="Hello user")]),
-        session_memory=SessionMemory(),
+        client=FakeClient(
+            [FakeResult("message", content="Hello user", reasoning_content="Answer directly")]
+        ),
+        session_memory=session_memory,
         project_store=FakeProjectStore(),
         longterm_store=FakeLongTermStore(),
         tool_registry=FakeRegistry({"ok": True}),
     )
 
-    reply = await loop.run_turn("demo-user", "demo-project", "Hi")
+    result = await loop.run_turn("demo-user", "demo-project", "Hi")
 
-    assert reply == "Hello user"
+    assert result.content == "Hello user"
+    assert result.reasoning_content == "Answer directly"
+    assert session_memory.recent_messages()[-1] == {
+        "role": "assistant",
+        "content": "Hello user",
+    }
 
 
 @pytest.mark.asyncio
 async def test_run_turn_handles_single_memory_write_then_returns_final_reply():
     from agent.loop import AgentLoop
 
+    session_memory = SessionMemory()
     loop = AgentLoop(
         settings=type(
             "Settings",
@@ -98,15 +115,24 @@ async def test_run_turn_handles_single_memory_write_then_returns_final_reply():
                         "reason": "explicit preference",
                     },
                 ),
-                FakeResult("message", content="I will remember that preference."),
+                FakeResult(
+                    "message",
+                    content="I will remember that preference.",
+                    reasoning_content="Preference stored successfully",
+                ),
             ]
         ),
-        session_memory=SessionMemory(),
+        session_memory=session_memory,
         project_store=FakeProjectStore(),
         longterm_store=FakeLongTermStore(),
         tool_registry=FakeRegistry({"ok": True, "key": "response_style"}),
     )
 
-    reply = await loop.run_turn("demo-user", "demo-project", "Answer concisely")
+    result = await loop.run_turn("demo-user", "demo-project", "Answer concisely")
 
-    assert reply == "I will remember that preference."
+    assert result.content == "I will remember that preference."
+    assert result.reasoning_content == "Preference stored successfully"
+    assert session_memory.recent_messages()[-1] == {
+        "role": "assistant",
+        "content": "I will remember that preference.",
+    }

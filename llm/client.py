@@ -12,6 +12,7 @@ from config import Settings
 class LLMResult:
     type: Literal["message", "tool_call"]
     content: str
+    reasoning_content: str | None
     tool_name: str | None
     tool_args: dict[str, Any] | None
     raw_response: dict[str, Any]
@@ -37,7 +38,7 @@ class DeepSeekClient:
             tools=tools,
         )
         payload = response.model_dump()
-        self._logger.info("deepseek_raw_response=%s", payload)
+        self._logger.debug("deepseek_raw_response=%s", payload)
         return self.normalize_response(payload)
 
     @staticmethod
@@ -45,6 +46,11 @@ class DeepSeekClient:
         choice = payload["choices"][0]
         message = choice["message"]
         tool_calls = message.get("tool_calls") or []
+        reasoning_content = (
+            message.get("reasoning_content")
+            or message.get("reasoning_conttent")
+            or None
+        )
 
         if tool_calls:
             tool_call = tool_calls[0]
@@ -53,6 +59,7 @@ class DeepSeekClient:
             return LLMResult(
                 type="tool_call",
                 content=message.get("content", "") or "",
+                reasoning_content=reasoning_content,
                 tool_name=tool_call["function"]["name"],
                 tool_args=parsed_arguments,
                 raw_response=payload,
@@ -61,6 +68,7 @@ class DeepSeekClient:
         return LLMResult(
             type="message",
             content=message.get("content", "") or "",
+            reasoning_content=reasoning_content,
             tool_name=None,
             tool_args=None,
             raw_response=payload,
