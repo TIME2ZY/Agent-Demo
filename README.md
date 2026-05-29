@@ -1,38 +1,22 @@
 # Agent-Demo
 
-`Agent-Demo` is an early-stage Python project for a memory-first CLI assistant.
-The repository currently contains the configuration layer, a shared SQLite
-storage layer, and the first round of tests that define the baseline behavior.
-
-## Current Status
-
-The project is still in the scaffold phase.
-
-- Implemented:
-  - environment and runtime settings loading in [`config.py`](./config.py)
-  - shared SQLite connection and schema bootstrap in [`storage/db.py`](./storage/db.py)
-  - smoke, config, and storage tests under [`tests/`](./tests)
-- Reserved for later tasks:
-  - `agent/`
-  - `llm/`
-  - `memory/`
-  - `tools/`
-
-There is no runnable `main.py` entry point yet. For now, the repository is best
-treated as a tested foundation rather than a complete assistant.
+`Agent-Demo` is a memory-first CLI assistant prototype. The host process owns
+prompt assembly, memory retrieval, and turn orchestration, while the model can
+persist durable facts through a single `memory_write` tool.
 
 ## Project Layout
 
 ```text
 Agent-Demo/
-|-- agent/          # reserved package for the turn loop and prompt assembly
-|-- docs/           # planning and design notes
-|-- llm/            # reserved package for provider clients
-|-- memory/         # reserved package for memory services
-|-- storage/        # implemented SQLite access layer
-|-- tests/          # active test suite
-|-- tools/          # reserved package for model-callable tools
-|-- config.py       # implemented runtime settings loader
+|-- agent/          # turn loop and prompt assembly
+|-- docs/           # design notes and implementation plan
+|-- llm/            # DeepSeek client wrapper
+|-- memory/         # session, project, and long-term memory stores
+|-- storage/        # shared SQLite access layer
+|-- tests/          # test suite
+|-- tools/          # model-callable tool registry and builtins
+|-- config.py       # runtime settings loader
+|-- main.py         # CLI entry point
 |-- pyproject.toml  # project metadata and test configuration
 `-- uv.lock         # locked dependency graph for uv
 ```
@@ -60,6 +44,14 @@ uv run pytest -q
 ```powershell
 uv run pytest tests/storage/test_db.py -q
 ```
+
+## Run The CLI
+
+```powershell
+uv run python main.py --user-id demo-user --project-id demo-project
+```
+
+Type `exit` or `quit` to end the session.
 
 ## Environment Variables
 

@@ -16,3 +16,9 @@ def test_runtime_packages_are_importable():
         assert module is not None
         assert module.__file__ is not None
         assert module.__file__.endswith("__init__.py")
+
+
+def test_main_module_is_importable():
+    module = importlib.import_module("main")
+
+    assert module is not None
