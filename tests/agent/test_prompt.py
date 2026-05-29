@@ -38,6 +38,12 @@ def test_build_system_prompt_includes_identity_and_memory_schema_rules():
     assert "user_name" in prompt
     assert "user_role" in prompt
     assert "language_preference" in prompt
+    assert "read_file" in prompt
+    assert "write_file" in prompt
+    assert "run_shell" in prompt
+    assert "web_search" in prompt
+    assert "must use the corresponding tool" in prompt
+    assert "Never claim that you read" in prompt
 
 
 def test_format_longterm_memories_respects_item_limit():
@@ -89,3 +95,84 @@ def test_build_messages_includes_memory_context_and_trimmed_session_history():
         {"role": "user", "content": "third"},
         {"role": "user", "content": "Current question"},
     ]
+
+
+def test_build_messages_does_not_duplicate_current_user_message_when_already_in_session():
+    settings = SimpleNamespace(
+        max_longterm_items_in_prompt=1,
+        max_session_messages_in_prompt=4,
+    )
+
+    messages = build_messages(
+        settings=settings,
+        longterm_memories=[],
+        project_context=None,
+        session_messages=[
+            {"role": "user", "content": "Current question"},
+            {
+                "role": "assistant",
+                "tool_calls": [
+                    {
+                        "id": "call-1",
+                        "type": "function",
+                        "function": {"name": "read_file", "arguments": '{"path":"a.txt"}'},
+                    }
+                ],
+            },
+            {
+                "role": "tool",
+                "name": "read_file",
+                "tool_call_id": "call-1",
+                "content": '{"ok": true}',
+            },
+        ],
+        user_message="Current question",
+    )
+
+    user_messages = [message for message in messages if message.get("role") == "user"]
+    assert user_messages == [{"role": "user", "content": "Current question"}]
+
+
+def test_build_messages_keeps_tool_result_paired_with_preceding_tool_call_when_trimming():
+    settings = SimpleNamespace(
+        max_longterm_items_in_prompt=1,
+        max_session_messages_in_prompt=4,
+    )
+
+    messages = build_messages(
+        settings=settings,
+        longterm_memories=[],
+        project_context=None,
+        session_messages=[
+            {"role": "user", "content": "old question"},
+            {"role": "assistant", "content": "old answer", "reasoning_content": "done"},
+            {"role": "user", "content": "Current question"},
+            {
+                "role": "assistant",
+                "content": "Reading file",
+                "reasoning_content": "Need file contents",
+                "tool_calls": [
+                    {
+                        "id": "call-1",
+                        "type": "function",
+                        "function": {"name": "read_file", "arguments": '{"path":"a.txt"}'},
+                    }
+                ],
+            },
+            {
+                "role": "tool",
+                "name": "read_file",
+                "tool_call_id": "call-1",
+                "content": '{"ok": true}',
+            },
+        ],
+        user_message="Current question",
+    )
+
+    assistant_index = next(
+        index for index, message in enumerate(messages) if message.get("tool_calls")
+    )
+    assert messages[assistant_index]["content"] == "Reading file"
+    assert messages[assistant_index]["reasoning_content"] == "Need file contents"
+    assert messages[assistant_index + 1]["role"] == "tool"
+    assert messages[assistant_index + 1]["tool_call_id"] == "call-1"

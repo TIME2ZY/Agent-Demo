@@ -20,7 +20,7 @@ def test_load_settings_reads_expected_values(monkeypatch, tmp_path):
     assert settings.deepseek_base_url == "https://example.invalid"
     assert settings.model_name == "deepseek-chat"
     assert settings.db_path == db_path
-    assert settings.max_tool_steps_per_turn == 1
+    assert settings.max_tool_steps_per_turn == 4
     assert settings.session_history_limit == 8
 
 

@@ -54,7 +54,7 @@ main.py ──► AgentLoop ──► PromptBuilder ──► DeepSeekClient
 - **Tool validation** — `validate_memory_write_args` enforces allowlists for both `longterm` and `project` keys before the handler runs
 - **Project memory schema** — list-typed fields (`constraints`, `decisions`, `current_status`, `open_questions`, `major_milestones`) are dedup-appended on merge; scalar fields (`project_goal`, `tech_stack`) are overwritten
 - **`LLMResult.type`** is `"message"` or `"tool_call"` — `AgentLoop` branches on this to decide whether to call tools or return immediately
-- **`max_tool_steps_per_turn`** is currently 1 — only one tool call chain per user turn
+- **`max_tool_steps_per_turn`** defaults to 4 — `AgentLoop` can execute multiple tool calls within one user turn before requiring a final assistant message
 - **Tests use `tmp_path` fixture** for isolated SQLite databases — see `tests/conftest.py`
 
 ## Environment

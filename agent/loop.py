@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Callable
 
 from agent.prompt import build_messages
 from llm.client import LLMResult
@@ -21,52 +21,70 @@ class AgentLoop:
         self._longterm_store = longterm_store
         self._tool_registry = tool_registry
 
-    async def run_turn(self, user_id: str, project_id: str, user_message: str) -> LLMResult:
+    async def run_turn(
+        self,
+        user_id: str,
+        project_id: str,
+        user_message: str,
+        on_stream: Callable[[str], None] | None = None,
+    ) -> LLMResult:
         self._session_memory.add_user_message(user_message)
 
-        project_context = await self._project_store.get_project_context(project_id)
-        longterm_memories = await self._longterm_store.list_memories(user_id)
-        prompt_messages = build_messages(
-            settings=self._settings,
-            longterm_memories=longterm_memories,
-            project_context=project_context,
-            session_messages=self._session_memory.recent_messages(
-                self._settings.max_session_messages_in_prompt
-            ),
-            user_message=user_message,
-        )
+        tool_steps = 0
+        use_streaming = False
 
-        result = await self._client.chat(
-            prompt_messages,
-            tools=self._tool_registry.schemas(),
-        )
+        while True:
+            project_context = await self._project_store.get_project_context(project_id)
+            longterm_memories = await self._longterm_store.list_memories(user_id)
+            prompt_messages = build_messages(
+                settings=self._settings,
+                longterm_memories=longterm_memories,
+                project_context=project_context,
+                session_messages=self._session_memory.recent_messages(),
+                user_message=user_message,
+            )
 
-        if result.type == "message":
-            self._session_memory.add_assistant_message(result.content)
-            return result
+            if use_streaming and on_stream is not None:
+                result = await self._client.chat_stream(
+                    prompt_messages,
+                    tools=self._tool_registry.schemas(),
+                    on_content_chunk=on_stream,
+                )
+            else:
+                result = await self._client.chat(
+                    prompt_messages,
+                    tools=self._tool_registry.schemas(),
+                )
 
-        if self._settings.max_tool_steps_per_turn < 1:
-            raise RuntimeError("Tool calls are disabled for this run")
+            if result.type == "message":
+                self._session_memory.add_assistant_message(
+                    result.content,
+                    reasoning_content=result.reasoning_content,
+                )
+                return result
 
-        if not result.tool_call_id:
-            raise RuntimeError("Tool call result is missing tool_call_id")
+            if self._settings.max_tool_steps_per_turn < 1:
+                raise RuntimeError("Tool calls are disabled for this run")
+            if tool_steps >= self._settings.max_tool_steps_per_turn:
+                raise RuntimeError("Exceeded max tool steps per turn")
+            if not result.tool_call_id:
+                raise RuntimeError("Tool call result is missing tool_call_id")
 
-        self._session_memory.add_tool_call(result.tool_call_id, result.tool_name, result.tool_args)
-        tool_result = await self._tool_registry.dispatch(result.tool_name, result.tool_args)
-        self._session_memory.add_tool_result(result.tool_call_id, result.tool_name, tool_result)
-
-        follow_up_messages = build_messages(
-            settings=self._settings,
-            longterm_memories=await self._longterm_store.list_memories(user_id),
-            project_context=await self._project_store.get_project_context(project_id),
-            session_messages=self._session_memory.recent_messages(
-                self._settings.max_session_messages_in_prompt
-            ),
-            user_message=user_message,
-        )
-        final_result = await self._client.chat(
-            follow_up_messages,
-            tools=self._tool_registry.schemas(),
-        )
-        self._session_memory.add_assistant_message(final_result.content)
-        return final_result
+            tool_result = await self._tool_registry.dispatch(
+                result.tool_name,
+                result.tool_args,
+            )
+            self._session_memory.add_tool_call(
+                result.tool_call_id,
+                result.tool_name,
+                result.tool_args,
+                content=result.content,
+                reasoning_content=result.reasoning_content,
+            )
+            self._session_memory.add_tool_result(
+                result.tool_call_id,
+                result.tool_name,
+                tool_result,
+            )
+            tool_steps += 1
+            use_streaming = True

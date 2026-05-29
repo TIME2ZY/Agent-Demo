@@ -14,7 +14,7 @@ class Settings:
     deepseek_base_url: str
     model_name: str
     db_path: Path
-    max_tool_steps_per_turn: int = 1
+    max_tool_steps_per_turn: int = 4
     session_history_limit: int = 8
     max_longterm_items_in_prompt: int = 5
     max_session_messages_in_prompt: int = 8

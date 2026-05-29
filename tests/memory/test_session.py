@@ -22,3 +22,20 @@ def test_session_memory_can_store_tool_messages():
     assert messages[0]["tool_calls"][0]["id"] == "call-1"
     assert messages[1]["role"] == "tool"
     assert messages[1]["tool_call_id"] == "call-1"
+
+
+def test_session_memory_preserves_assistant_reasoning_fields():
+    session = SessionMemory()
+    session.add_assistant_message("Hi there", reasoning_content="Simple greeting")
+    session.add_tool_call(
+        "call-1",
+        "read_file",
+        {"path": "notes.txt"},
+        content="先读文件",
+        reasoning_content="需要文件内容",
+    )
+
+    messages = session.recent_messages()
+    assert messages[0]["reasoning_content"] == "Simple greeting"
+    assert messages[1]["content"] == "先读文件"
+    assert messages[1]["reasoning_content"] == "需要文件内容"
