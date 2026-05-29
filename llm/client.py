@@ -1,7 +1,7 @@
 import json
 import logging
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Callable, Literal
 
 from openai import AsyncOpenAI
 
@@ -41,6 +41,89 @@ class DeepSeekClient:
         payload = response.model_dump()
         self._logger.debug("deepseek_raw_response=%s", payload)
         return self.normalize_response(payload)
+
+    async def chat_stream(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+        on_content_chunk: Callable[[str], None] | None = None,
+    ) -> LLMResult:
+        stream = await self._client.chat.completions.create(
+            model=self._settings.model_name,
+            messages=messages,
+            tools=tools,
+            stream=True,
+        )
+
+        full_content: list[str] = []
+        full_reasoning: list[str] = []
+        tool_calls_by_index: dict[int, dict[str, Any]] = {}
+        finish_reason: str | None = None
+
+        async for chunk in stream:
+            payload = chunk.model_dump() if hasattr(chunk, "model_dump") else chunk
+            choice = (payload.get("choices") or [{}])[0]
+            delta = choice.get("delta") or {}
+
+            content_piece = delta.get("content") or ""
+            if content_piece:
+                full_content.append(content_piece)
+                if on_content_chunk is not None:
+                    on_content_chunk(content_piece)
+
+            reasoning_piece = (
+                delta.get("reasoning_content")
+                or delta.get("reasoning_conttent")
+                or ""
+            )
+            if reasoning_piece:
+                full_reasoning.append(reasoning_piece)
+
+            for tool_call in delta.get("tool_calls") or []:
+                index = tool_call.get("index", 0)
+                merged_tool_call = tool_calls_by_index.setdefault(
+                    index,
+                    {
+                        "id": "",
+                        "type": "function",
+                        "function": {"name": "", "arguments": ""},
+                    },
+                )
+                if tool_call.get("id"):
+                    merged_tool_call["id"] = tool_call["id"]
+                if tool_call.get("type"):
+                    merged_tool_call["type"] = tool_call["type"]
+                function = tool_call.get("function") or {}
+                if function.get("name"):
+                    merged_tool_call["function"]["name"] += function["name"]
+                if function.get("arguments"):
+                    merged_tool_call["function"]["arguments"] += function["arguments"]
+
+            if choice.get("finish_reason") is not None:
+                finish_reason = choice["finish_reason"]
+
+        message: dict[str, Any] = {
+            "role": "assistant",
+            "content": "".join(full_content),
+        }
+        if full_reasoning:
+            message["reasoning_content"] = "".join(full_reasoning)
+        if tool_calls_by_index:
+            message["tool_calls"] = [
+                tool_calls_by_index[index]
+                for index in sorted(tool_calls_by_index)
+            ]
+
+        rebuilt_payload = {
+            "choices": [
+                {
+                    "message": message,
+                    "finish_reason": finish_reason,
+                }
+            ]
+        }
+        self._logger.debug("deepseek_stream_response=%s", rebuilt_payload)
+        return self.normalize_response(rebuilt_payload)
 
     @staticmethod
     def normalize_response(payload: dict[str, Any]) -> LLMResult:

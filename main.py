@@ -11,7 +11,10 @@ from memory.longterm import LongTermMemoryStore
 from memory.project import ProjectMemoryStore
 from memory.session import SessionMemory
 from storage.db import Database
+from tools.builtin.file_tools import create_read_file_tool, create_write_file_tool
 from tools.builtin.memory_write import create_memory_write_tool
+from tools.builtin.shell_tool import create_run_shell_tool
+from tools.builtin.web_search import create_web_search_tool
 from tools.registry import ToolRegistry
 
 
@@ -30,6 +33,18 @@ def write_output_line(text: str, stream=None) -> None:
     except UnicodeEncodeError:
         encoding = target.encoding or "utf-8"
         target.buffer.write((text + "\n").encode(encoding, errors="replace"))
+        target.flush()
+
+
+def write_output_text(text: str, stream=None) -> None:
+    target = stream or sys.stdout
+
+    try:
+        target.write(text)
+        target.flush()
+    except UnicodeEncodeError:
+        encoding = target.encoding or "utf-8"
+        target.buffer.write(text.encode(encoding, errors="replace"))
         target.flush()
 
 
@@ -157,6 +172,10 @@ async def run_cli(user_id: str, project_id: str, debug: bool = False) -> None:
     registry.register(
         create_memory_write_tool(project_store, longterm_store, user_id, project_id)
     )
+    registry.register(create_read_file_tool())
+    registry.register(create_write_file_tool())
+    registry.register(create_run_shell_tool())
+    registry.register(create_web_search_tool())
 
     agent_loop = AgentLoop(
         settings=settings,
@@ -192,13 +211,28 @@ async def run_cli(user_id: str, project_id: str, debug: bool = False) -> None:
                 continue
 
             try:
-                result = await agent_loop.run_turn(user_id, project_id, user_message)
+                streamed = False
+
+                def write_chunk(text: str) -> None:
+                    nonlocal streamed
+                    streamed = True
+                    write_output_text(text)
+
+                result = await agent_loop.run_turn(
+                    user_id,
+                    project_id,
+                    user_message,
+                    on_stream=write_chunk,
+                )
             except Exception:
                 logging.getLogger(__name__).exception("turn_processing_failed")
                 write_output_line(format_turn_error_message(debug))
                 continue
 
-            print_turn_output(result)
+            if streamed:
+                write_output_text("\n")
+            else:
+                print_turn_output(result)
     finally:
         await database.close()
 

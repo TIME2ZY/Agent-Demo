@@ -10,6 +10,22 @@ Use memory_write when:
 - the user states a stable long-term preference,
 - the user confirms a project goal, project constraint, project decision, or project status worth preserving.
 
+Use read_file when:
+- you need the exact contents of a local text file before answering or editing.
+
+Use write_file when:
+- you need to create or update a local text file as part of completing the task.
+
+Use run_shell when:
+- you need to execute a command, inspect the environment, or run tests to verify work.
+
+Use web_search when:
+- the user needs external or up-to-date information that may not be in the model's built-in knowledge.
+
+When the user explicitly asks you to read or write files, execute commands, or search the web, you must use the corresponding tool in the current turn before answering.
+
+Never claim that you read a file, modified a file, ran a command, or performed a web search unless the relevant tool call succeeded in the current turn.
+
 When writing project memory, prefer this schema:
 - project_goal: one-sentence description of the project
 - tech_stack: selected stack or architecture summary
@@ -103,10 +119,30 @@ def build_messages(
             format_project_memory(project_context),
         ]
     )
-    trimmed_session = session_messages[-settings.max_session_messages_in_prompt :]
+    trimmed_session = list(session_messages)
+    if len(trimmed_session) > settings.max_session_messages_in_prompt:
+        start = len(trimmed_session) - settings.max_session_messages_in_prompt
+        if (
+            start > 0
+            and trimmed_session[start].get("role") == "tool"
+            and trimmed_session[start - 1].get("role") == "assistant"
+            and trimmed_session[start - 1].get("tool_calls")
+        ):
+            start -= 1
+        trimmed_session = trimmed_session[start:]
+    last_user_message = next(
+        (message for message in reversed(trimmed_session) if message.get("role") == "user"),
+        None,
+    )
+    trailing_current_user_message = (
+        last_user_message is not None
+        and last_user_message.get("content") == user_message
+    )
 
-    return [
+    messages = [
         {"role": "system", "content": system_content},
         *trimmed_session,
-        {"role": "user", "content": user_message},
     ]
+    if not trailing_current_user_message:
+        messages.append({"role": "user", "content": user_message})
+    return messages
