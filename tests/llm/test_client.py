@@ -59,6 +59,7 @@ def test_normalize_response_returns_tool_call_result():
     result = DeepSeekClient.normalize_response(payload)
 
     assert result.type == "tool_call"
+    assert result.tool_call_id == "call-1"
     assert result.tool_name == "memory_write"
     assert result.tool_args["key"] == "response_style"
     assert result.reasoning_content is None

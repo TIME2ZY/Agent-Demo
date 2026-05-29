@@ -13,6 +13,7 @@ class LLMResult:
     type: Literal["message", "tool_call"]
     content: str
     reasoning_content: str | None
+    tool_call_id: str | None
     tool_name: str | None
     tool_args: dict[str, Any] | None
     raw_response: dict[str, Any]
@@ -60,6 +61,7 @@ class DeepSeekClient:
                 type="tool_call",
                 content=message.get("content", "") or "",
                 reasoning_content=reasoning_content,
+                tool_call_id=tool_call.get("id"),
                 tool_name=tool_call["function"]["name"],
                 tool_args=parsed_arguments,
                 raw_response=payload,
@@ -69,6 +71,7 @@ class DeepSeekClient:
             type="message",
             content=message.get("content", "") or "",
             reasoning_content=reasoning_content,
+            tool_call_id=None,
             tool_name=None,
             tool_args=None,
             raw_response=payload,

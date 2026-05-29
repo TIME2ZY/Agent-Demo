@@ -48,9 +48,12 @@ class AgentLoop:
         if self._settings.max_tool_steps_per_turn < 1:
             raise RuntimeError("Tool calls are disabled for this run")
 
-        self._session_memory.add_tool_call(result.tool_name, result.tool_args)
+        if not result.tool_call_id:
+            raise RuntimeError("Tool call result is missing tool_call_id")
+
+        self._session_memory.add_tool_call(result.tool_call_id, result.tool_name, result.tool_args)
         tool_result = await self._tool_registry.dispatch(result.tool_name, result.tool_args)
-        self._session_memory.add_tool_result(result.tool_name, tool_result)
+        self._session_memory.add_tool_result(result.tool_call_id, result.tool_name, tool_result)
 
         follow_up_messages = build_messages(
             settings=self._settings,

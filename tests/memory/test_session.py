@@ -14,9 +14,11 @@ def test_session_memory_tracks_recent_messages():
 
 def test_session_memory_can_store_tool_messages():
     session = SessionMemory()
-    session.add_tool_call("memory_write", {"key": "response_style"})
-    session.add_tool_result("memory_write", {"ok": True})
+    session.add_tool_call("call-1", "memory_write", {"key": "response_style"})
+    session.add_tool_result("call-1", "memory_write", {"ok": True})
 
     messages = session.recent_messages()
     assert messages[0]["role"] == "assistant"
+    assert messages[0]["tool_calls"][0]["id"] == "call-1"
     assert messages[1]["role"] == "tool"
+    assert messages[1]["tool_call_id"] == "call-1"

@@ -12,13 +12,13 @@ class SessionMemory:
     def add_assistant_message(self, content: str) -> None:
         self._messages.append({"role": "assistant", "content": content})
 
-    def add_tool_call(self, name: str, arguments: dict[str, Any]) -> None:
+    def add_tool_call(self, tool_call_id: str, name: str, arguments: dict[str, Any]) -> None:
         self._messages.append(
             {
                 "role": "assistant",
                 "tool_calls": [
                     {
-                        "id": f"{name}-call",
+                        "id": tool_call_id,
                         "type": "function",
                         "function": {
                             "name": name,
@@ -29,11 +29,12 @@ class SessionMemory:
             }
         )
 
-    def add_tool_result(self, name: str, result: dict[str, Any]) -> None:
+    def add_tool_result(self, tool_call_id: str, name: str, result: dict[str, Any]) -> None:
         self._messages.append(
             {
                 "role": "tool",
                 "name": name,
+                "tool_call_id": tool_call_id,
                 "content": json.dumps(result, ensure_ascii=False),
             }
         )

@@ -21,6 +21,7 @@ def _utc_timestamp() -> str:
 def _empty_context() -> dict[str, Any]:
     return {
         "project_goal": "",
+        "tech_stack": "",
         "constraints": [],
         "decisions": [],
         "current_status": [],

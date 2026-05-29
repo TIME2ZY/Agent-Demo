@@ -13,6 +13,7 @@ async def test_project_memory_store_saves_and_loads_context(db_path):
     store = ProjectMemoryStore(database)
     context = {
         "project_goal": "Build a memory-first agent",
+        "tech_stack": "LangGraph + LiteLLM",
         "constraints": ["CLI only"],
         "decisions": [],
         "current_status": [],
@@ -23,6 +24,7 @@ async def test_project_memory_store_saves_and_loads_context(db_path):
     loaded = await store.get_project_context("demo-project")
 
     assert loaded["project_goal"] == "Build a memory-first agent"
+    assert loaded["tech_stack"] == "LangGraph + LiteLLM"
     assert loaded["constraints"] == ["CLI only"]
 
     await database.close()

@@ -43,12 +43,14 @@ class FakeResult:
         self,
         result_type,
         content="",
+        tool_call_id=None,
         tool_name=None,
         tool_args=None,
         reasoning_content=None,
     ):
         self.type = result_type
         self.content = content
+        self.tool_call_id = tool_call_id
         self.tool_name = tool_name
         self.tool_args = tool_args
         self.reasoning_content = reasoning_content
@@ -107,6 +109,7 @@ async def test_run_turn_handles_single_memory_write_then_returns_final_reply():
             [
                 FakeResult(
                     "tool_call",
+                    tool_call_id="call-1",
                     tool_name="memory_write",
                     tool_args={
                         "memory_level": "longterm",
@@ -132,6 +135,8 @@ async def test_run_turn_handles_single_memory_write_then_returns_final_reply():
 
     assert result.content == "I will remember that preference."
     assert result.reasoning_content == "Preference stored successfully"
+    assert session_memory.recent_messages()[1]["tool_calls"][0]["id"] == "call-1"
+    assert session_memory.recent_messages()[2]["tool_call_id"] == "call-1"
     assert session_memory.recent_messages()[-1] == {
         "role": "assistant",
         "content": "I will remember that preference.",
