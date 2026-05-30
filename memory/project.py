@@ -64,15 +64,19 @@ class ProjectMemoryStore:
         key: str,
         value: Any,
         reason: str | None = None,
+        replace: bool = False,
     ) -> dict[str, Any]:
         del reason
         context = await self.get_project_context(project_id) or _empty_context()
 
         if key in LIST_FIELDS:
             values = value if isinstance(value, list) else [value]
-            for item in values:
-                if item not in context[key]:
-                    context[key].append(item)
+            if replace:
+                context[key] = list(values)
+            else:
+                for item in values:
+                    if item not in context[key]:
+                        context[key].append(item)
         else:
             context[key] = value
 

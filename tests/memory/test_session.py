@@ -31,11 +31,64 @@ def test_session_memory_preserves_assistant_reasoning_fields():
         "call-1",
         "read_file",
         {"path": "notes.txt"},
-        content="先读文件",
-        reasoning_content="需要文件内容",
+        content="Read the file first",
+        reasoning_content="Need the file contents",
     )
 
     messages = session.recent_messages()
     assert messages[0]["reasoning_content"] == "Simple greeting"
-    assert messages[1]["content"] == "先读文件"
-    assert messages[1]["reasoning_content"] == "需要文件内容"
+    assert messages[1]["content"] == "Read the file first"
+    assert messages[1]["reasoning_content"] == "Need the file contents"
+
+
+def test_session_memory_can_store_multiple_tool_calls_in_one_message():
+    session = SessionMemory()
+    session.add_tool_calls(
+        [
+            {"id": "call-1", "name": "read_file", "arguments": {"path": "notes.txt"}},
+            {"id": "call-2", "name": "write_file", "arguments": {"path": "out.txt"}},
+        ],
+        content="Read and write",
+        reasoning_content="Need both operations",
+    )
+
+    messages = session.recent_messages()
+    assert messages == [
+        {
+            "role": "assistant",
+            "content": "Read and write",
+            "reasoning_content": "Need both operations",
+            "tool_calls": [
+                {
+                    "id": "call-1",
+                    "type": "function",
+                    "function": {
+                        "name": "read_file",
+                        "arguments": '{"path": "notes.txt"}',
+                    },
+                },
+                {
+                    "id": "call-2",
+                    "type": "function",
+                    "function": {
+                        "name": "write_file",
+                        "arguments": '{"path": "out.txt"}',
+                    },
+                },
+            ],
+        }
+    ]
+
+
+def test_session_memory_drops_old_messages_when_limit_is_reached():
+    session = SessionMemory(max_messages=3)
+    session.add_user_message("u1")
+    session.add_assistant_message("a1")
+    session.add_user_message("u2")
+    session.add_assistant_message("a2")
+
+    assert session.recent_messages() == [
+        {"role": "assistant", "content": "a1"},
+        {"role": "user", "content": "u2"},
+        {"role": "assistant", "content": "a2"},
+    ]

@@ -17,6 +17,7 @@ class LLMResult:
     tool_name: str | None
     tool_args: dict[str, Any] | None
     raw_response: dict[str, Any]
+    tool_calls: list[dict[str, Any]] | None = None
 
 
 class DeepSeekClient:
@@ -129,25 +130,38 @@ class DeepSeekClient:
     def normalize_response(payload: dict[str, Any]) -> LLMResult:
         choice = payload["choices"][0]
         message = choice["message"]
-        tool_calls = message.get("tool_calls") or []
+        raw_tool_calls = message.get("tool_calls") or []
         reasoning_content = (
             message.get("reasoning_content")
             or message.get("reasoning_conttent")
             or None
         )
 
-        if tool_calls:
-            tool_call = tool_calls[0]
-            arguments = tool_call["function"]["arguments"]
-            parsed_arguments = json.loads(arguments) if isinstance(arguments, str) else arguments
+        if raw_tool_calls:
+            parsed_tool_calls = []
+            for tool_call in raw_tool_calls:
+                arguments = tool_call["function"]["arguments"]
+                parsed_arguments = (
+                    json.loads(arguments) if isinstance(arguments, str) else arguments
+                )
+                parsed_tool_calls.append(
+                    {
+                        "id": tool_call.get("id"),
+                        "name": tool_call["function"]["name"],
+                        "arguments": parsed_arguments,
+                    }
+                )
+
+            first_tool_call = parsed_tool_calls[0]
             return LLMResult(
                 type="tool_call",
                 content=message.get("content", "") or "",
                 reasoning_content=reasoning_content,
-                tool_call_id=tool_call.get("id"),
-                tool_name=tool_call["function"]["name"],
-                tool_args=parsed_arguments,
+                tool_call_id=first_tool_call["id"],
+                tool_name=first_tool_call["name"],
+                tool_args=first_tool_call["arguments"],
                 raw_response=payload,
+                tool_calls=parsed_tool_calls,
             )
 
         return LLMResult(
@@ -158,4 +172,5 @@ class DeepSeekClient:
             tool_name=None,
             tool_args=None,
             raw_response=payload,
+            tool_calls=None,
         )

@@ -166,7 +166,7 @@ async def run_cli(user_id: str, project_id: str, debug: bool = False) -> None:
 
     project_store = ProjectMemoryStore(database)
     longterm_store = LongTermMemoryStore(database)
-    session_memory = SessionMemory()
+    session_memory = SessionMemory(max_messages=settings.session_history_limit)
     client = DeepSeekClient(settings)
     registry = ToolRegistry()
     registry.register(
