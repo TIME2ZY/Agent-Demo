@@ -181,6 +181,19 @@ async def test_run_shell_tool_returns_stdout():
 
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(sys.platform != "win32", reason="PowerShell-specific behavior")
+async def test_run_shell_tool_executes_powershell_commands_on_windows():
+    registry = ToolRegistry()
+    registry.register(create_run_shell_tool())
+
+    result = await registry.dispatch("run_shell", {"command": "Write-Output hello"})
+
+    assert result["ok"] is True
+    assert result["returncode"] == 0
+    assert result["stdout"].strip() == "hello"
+
+
+@pytest.mark.asyncio
 async def test_run_shell_tool_returns_nonzero_exit_code():
     registry = ToolRegistry()
     registry.register(create_run_shell_tool())

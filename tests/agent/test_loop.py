@@ -78,13 +78,21 @@ class FakeResult:
         tool_name=None,
         tool_args=None,
         reasoning_content=None,
+        tool_calls=None,
     ):
+        if tool_calls and tool_call_id is None:
+            tool_call_id = tool_calls[0]["id"]
+        if tool_calls and tool_name is None:
+            tool_name = tool_calls[0]["name"]
+        if tool_calls and tool_args is None:
+            tool_args = tool_calls[0]["arguments"]
         self.type = result_type
         self.content = content
         self.tool_call_id = tool_call_id
         self.tool_name = tool_name
         self.tool_args = tool_args
         self.reasoning_content = reasoning_content
+        self.tool_calls = tool_calls
 
 
 @pytest.mark.asyncio
@@ -250,6 +258,85 @@ async def test_run_turn_handles_multiple_tool_calls_before_final_message():
         "content": "I checked the saved preference and the file.",
         "reasoning_content": "Two tool calls completed",
     }
+
+
+@pytest.mark.asyncio
+async def test_run_turn_dispatches_all_tool_calls_from_one_model_response():
+    from agent.loop import AgentLoop
+
+    session_memory = SessionMemory()
+    registry = FakeRegistry(
+        [
+            {"ok": True, "path": "notes.txt", "content": "draft"},
+            {"ok": True, "path": "out.txt"},
+        ]
+    )
+    loop = AgentLoop(
+        settings=type(
+            "Settings",
+            (),
+            {
+                "max_tool_steps_per_turn": 3,
+                "max_session_messages_in_prompt": 8,
+                "max_longterm_items_in_prompt": 5,
+            },
+        )(),
+        client=FakeClient(
+            [
+                FakeResult(
+                    "tool_call",
+                    content="Reading then writing",
+                    reasoning_content="Need both file operations before answering",
+                    tool_calls=[
+                        {
+                            "id": "call-1",
+                            "name": "read_file",
+                            "arguments": {"path": "notes.txt"},
+                        },
+                        {
+                            "id": "call-2",
+                            "name": "write_file",
+                            "arguments": {"path": "out.txt", "content": "draft"},
+                        },
+                    ],
+                ),
+                FakeResult(
+                    "message",
+                    content="I copied the notes into out.txt.",
+                    reasoning_content="Both tool calls finished",
+                ),
+            ]
+        ),
+        session_memory=session_memory,
+        project_store=FakeProjectStore(),
+        longterm_store=FakeLongTermStore(),
+        tool_registry=registry,
+    )
+
+    result = await loop.run_turn("demo-user", "demo-project", "Copy the notes")
+
+    assert result.content == "I copied the notes into out.txt."
+    assert registry.calls == [
+        ("read_file", {"path": "notes.txt"}),
+        ("write_file", {"path": "out.txt", "content": "draft"}),
+    ]
+    assert session_memory.recent_messages()[1]["tool_calls"] == [
+        {
+            "id": "call-1",
+            "type": "function",
+            "function": {"name": "read_file", "arguments": '{"path": "notes.txt"}'},
+        },
+        {
+            "id": "call-2",
+            "type": "function",
+            "function": {
+                "name": "write_file",
+                "arguments": '{"path": "out.txt", "content": "draft"}',
+            },
+        },
+    ]
+    assert session_memory.recent_messages()[2]["tool_call_id"] == "call-1"
+    assert session_memory.recent_messages()[3]["tool_call_id"] == "call-2"
 
 
 @pytest.mark.asyncio
@@ -571,4 +658,43 @@ async def test_run_turn_does_not_leave_orphan_tool_call_after_tool_failure():
         {"role": "system", "content": client.calls[1]["messages"][0]["content"]},
         {"role": "user", "content": "Read the bad file"},
         {"role": "user", "content": "Say hello instead"},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_run_turn_respects_session_history_limit_before_prompt_trimming():
+    from agent.loop import AgentLoop
+
+    session_memory = SessionMemory()
+    session_memory.add_user_message("u1")
+    session_memory.add_assistant_message("a1")
+    session_memory.add_user_message("u2")
+    session_memory.add_assistant_message("a2")
+
+    client = FakeClient([FakeResult("message", content="fresh reply")])
+    loop = AgentLoop(
+        settings=type(
+            "Settings",
+            (),
+            {
+                "max_tool_steps_per_turn": 2,
+                "session_history_limit": 2,
+                "max_session_messages_in_prompt": 8,
+                "max_longterm_items_in_prompt": 5,
+            },
+        )(),
+        client=client,
+        session_memory=session_memory,
+        project_store=FakeProjectStore(),
+        longterm_store=FakeLongTermStore(),
+        tool_registry=FakeRegistry({"ok": True}),
+    )
+
+    await loop.run_turn("demo-user", "demo-project", "u3")
+
+    prompt_messages = client.calls[0]["messages"]
+    assert prompt_messages[1:] == [
+        {"role": "user", "content": "u2"},
+        {"role": "assistant", "content": "a2"},
+        {"role": "user", "content": "u3"},
     ]

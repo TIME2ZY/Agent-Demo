@@ -54,3 +54,30 @@ async def test_project_memory_store_merges_list_based_fields(db_path):
     assert loaded["constraints"] == ["No bash tool", "CLI only"]
 
     await database.close()
+
+
+@pytest.mark.asyncio
+async def test_project_memory_store_can_replace_list_based_fields(db_path):
+    database = Database(db_path)
+    await database.connect()
+    await database.init_schema()
+
+    store = ProjectMemoryStore(database)
+    await store.merge_project_memory(
+        "demo-project",
+        "constraints",
+        ["No bash tool", "CLI only"],
+        "initial constraints",
+    )
+    await store.merge_project_memory(
+        "demo-project",
+        "constraints",
+        ["Use uv only"],
+        "updated constraints",
+        replace=True,
+    )
+
+    loaded = await store.get_project_context("demo-project")
+    assert loaded["constraints"] == ["Use uv only"]
+
+    await database.close()

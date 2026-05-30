@@ -51,7 +51,7 @@ def validate_memory_write_args(arguments: dict[str, Any]) -> dict[str, Any]:
         "key": key,
         "value": arguments["value"],
         "reason": arguments["reason"],
-        "replace": arguments.get("replace", True),
+        "replace": bool(arguments.get("replace", False)),
     }
 
 
@@ -108,6 +108,7 @@ def create_memory_write_tool(
                 arguments["key"],
                 arguments["value"],
                 arguments["reason"],
+                replace=arguments["replace"],
             )
             await _log_memory_event(
                 database,

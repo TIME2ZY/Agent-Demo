@@ -1,4 +1,5 @@
 import asyncio
+import os
 from pathlib import Path
 from typing import Any
 
@@ -37,8 +38,28 @@ def create_run_shell_tool() -> RegisteredTool:
                 raise ValueError(f"cwd must point to an existing directory: {cwd_path}")
             cwd = str(cwd_path)
 
-        process = await asyncio.create_subprocess_shell(
-            arguments["command"],
+        command_text = arguments["command"]
+        if os.name == "nt":
+            stripped_command = command_text.lstrip()
+            if stripped_command.startswith(("\"", "'")):
+                command_text = f"& {command_text}"
+            command_text = (
+                "$ErrorActionPreference='Stop'; "
+                f"{command_text}; "
+                "if ($null -ne $LASTEXITCODE) { exit $LASTEXITCODE }"
+            )
+            command_parts = [
+                "powershell",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                command_text,
+            ]
+        else:
+            command_parts = ["/bin/sh", "-lc", command_text]
+
+        process = await asyncio.create_subprocess_exec(
+            *command_parts,
             cwd=cwd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,

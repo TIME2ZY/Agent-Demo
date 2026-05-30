@@ -99,6 +99,59 @@ def test_normalize_response_returns_tool_call_result():
     assert result.reasoning_content is None
 
 
+def test_normalize_response_preserves_multiple_tool_calls():
+    payload = {
+        "choices": [
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        {
+                            "id": "call-1",
+                            "type": "function",
+                            "function": {
+                                "name": "read_file",
+                                "arguments": json.dumps({"path": "notes.txt"}),
+                            },
+                        },
+                        {
+                            "id": "call-2",
+                            "type": "function",
+                            "function": {
+                                "name": "write_file",
+                                "arguments": json.dumps(
+                                    {"path": "out.txt", "content": "done"}
+                                ),
+                            },
+                        },
+                    ],
+                },
+                "finish_reason": "tool_calls",
+            }
+        ]
+    }
+
+    result = DeepSeekClient.normalize_response(payload)
+
+    assert result.type == "tool_call"
+    assert result.tool_call_id == "call-1"
+    assert result.tool_name == "read_file"
+    assert result.tool_args == {"path": "notes.txt"}
+    assert result.tool_calls == [
+        {
+            "id": "call-1",
+            "name": "read_file",
+            "arguments": {"path": "notes.txt"},
+        },
+        {
+            "id": "call-2",
+            "name": "write_file",
+            "arguments": {"path": "out.txt", "content": "done"},
+        },
+    ]
+
+
 @pytest.mark.asyncio
 async def test_chat_stream_accumulates_message_chunks_and_reasoning():
     chunks = [
